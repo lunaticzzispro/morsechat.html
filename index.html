@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Morse Chat</title>
+
+<style>
+body {
+    margin: 0;
+    background: radial-gradient(circle at top, #020617, #000);
+    color: white;
+    font-family: system-ui;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* PERFIL */
+#myProfile {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: #000;
+    border: 1px solid #1e293b;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    z-index: 10;
+}
+
+/* APP */
+#app {
+    width: 100%;
+    max-width: 360px;
+    height: 100dvh;
+    margin: 0 auto;
+    background: rgba(2,6,23,.95);
+    border-radius: 0;
+    border: 1px solid #1e293b;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* HEADER */
+header {
+    padding: 10px;
+    padding-left: 70px;
+    text-align: center;
+    border-bottom: 1px solid #1e293b;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* CHAT */
+#chat {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.msg {
+    background: #1e293b;
+    padding: 6px 10px;
+    border-radius: 14px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    max-width: 85%;
+    font-size: 12px;
+}
+
+.me {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    margin-left: auto;
+}
+
+.name {
+    font-size: 9px;
+    color: #94a3b8;
+}
+
+/* FOOTER */
+footer {
+    padding: 8px;
+    border-top: 1px solid #1e293b;
+}
+
+#current {
+    text-align: center;
+    font-size: 14px;
+}
+
+#decoded {
+    text-align: center;
+    font-size: 11px;
+    color: #22c55e;
+}
+
+/* KEYBOARD */
+.keyboard {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+button {
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: none;
+    background: #2563eb;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.space { background: #475569; }
+.send { background: #16a34a; }
+
+/* MORSE TABLE */
+#morseTable {
+    font-size: 10px;
+    padding: 6px;
+    border-top: 1px solid #1e293b;
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 4px;
+    opacity: .7;
+}
+
+/* PROFILE MODAL */
+#profileModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+#profileBox {
+    background: #020617;
+    padding: 14px;
+    width: 260px;
+    border-radius: 18px;
+    border: 1px solid #1e293b;
+}
+
+.section {
+    margin-top: 8px;
+    padding: 8px;
+    border-radius: 10px;
+    background: #020617;
+    border: 1px solid #1e293b;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+input {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px;
+    border-radius: 8px;
+    border: none;
+}
+</style>
+</head>
+
+<body>
+
+<div id="myProfile" onclick="openProfile(myUser)">Mi Perfil</div>
+
+<div id="app">
+<header id="chatTitle">Global Morse Chat</header>
+<div id="chat"></div>
+
+<footer>
+<div id="current"></div>
+<div id="decoded"></div>
+
+<div class="keyboard">
+<button onclick="add('.')">.</button>
+<button onclick="add('-')">-</button>
+<button class="space" onclick="space()">SPACE</button>
+</div>
+<div class="keyboard">
+<button class="send" onclick="send()">SEND</button>
+<button onclick="back()">⌫</button>
+</div>
+</footer>
+
+<div id="morseTable"></div>
+</div>
+
+<div id="profileModal">
+<div id="profileBox">
+<strong id="profileName"></strong>
+<div id="followersView"></div>
+
+<button id="followBtn" onclick="followUser()">Follow</button>
+<button id="privateBtn" onclick="startPrivate()">Private Chat</button>
+
+<div id="saveSection" class="section" onclick="toggleSession()">Guardar sesión</div>
+<div id="sessionBox" style="display:none">
+<input id="saveUser" placeholder="Usuario">
+<input id="savePass" type="password" placeholder="Contraseña">
+<button onclick="saveSession()">Guardar</button>
+</div>
+
+<strong>Bandeja de entrada</strong>
+<div id="inbox"></div>
+
+<button onclick="closeProfile()">Cerrar</button>
+</div>
+</div>
+
+<script>
+const MORSE={
+".-":"A","-...":"B","-.-.":"C","-..":"D",".":"E","..-.":"F",
+"--.":"G","....":"H","..":"I",".---":"J","-.-":"K",".-..":"L",
+"--":"M","-.":"N","---":"O",".--.":"P","--.-":"Q",".-.":"R",
+"...":"S","-":"T","..-":"U","...-":"V",".--":"W","-..-":"X",
+"-.--":"Y","--..":"Z"
+};
+
+for(let k in MORSE){
+    morseTable.innerHTML+=`<div>${k} = ${MORSE[k]}</div>`;
+}
+
+const sessionExists=localStorage.getItem("sessionUser");
+let myUser=sessionExists||"User("+Math.floor(Math.random()*9000+1000)+")";
+
+const channel=new BroadcastChannel("morse");
+let current="",privateWith=null,selectedUser=null;
+let followers={},inbox=[];
+
+function decode(s){
+    return s.split(" / ").map(
+        w=>w.split(" ").map(c=>MORSE[c]||"").join("")
+    ).join(" ");
+}
+
+function update(){
+    currentEl.textContent=current;
+    decoded.textContent=decode(current);
+}
+
+const currentEl=document.getElementById("current");
+const decoded=document.getElementById("decoded");
+
+function add(s){current+=s;update();}
+function space(){current+=" / ";update();}
+function back(){current=current.slice(0,-1);update();}
+
+function send(){
+    if(!current)return;
+    const d={user:myUser,msg:current,private:privateWith};
+    channel.postMessage(d);
+    render(d,true);
+    current="";update();
+}
+
+function render(d,me=false){
+    const div=document.createElement("div");
+    div.className="msg"+(me?" me":"");
+    div.innerHTML=`<div class="name">${d.user}</div>${d.msg}`;
+    div.onclick=()=>openProfile(d.user);
+    chat.appendChild(div);
+}
+
+channel.onmessage=e=>render(e.data);
+
+function openProfile(u){
+    selectedUser=u;
+    profileModal.style.display="flex";
+    profileName.textContent=u===myUser?"Mi Perfil":u;
+    followersView.textContent="Followers: "+(followers[u]||0);
+    followBtn.style.display=u===myUser?"none":"block";
+    privateBtn.style.display=u===myUser?"none":"block";
+    inbox.innerHTML=inbox.join("<br>");
+}
+
+function followUser(){
+    if(selectedUser===myUser)return;
+    followers[selectedUser]=(followers[selectedUser]||0)+1;
+    inbox.push("Nuevo seguidor: "+selectedUser);
+    openProfile(selectedUser);
+}
+
+function toggleSession(){
+    sessionBox.style.display=sessionBox.style.display==="none"?"block":"none";
+}
+
+function saveSession(){
+    if(sessionExists||!saveUser.value)return;
+    localStorage.setItem("sessionUser",saveUser.value);
+    location.reload();
+}
+
+if(sessionExists){
+    saveSection.style.display="none";
+    sessionBox.style.display="none";
+}
+
+function startPrivate(){
+    if(selectedUser===myUser)return;
+    privateWith=selectedUser;
+    chat.innerHTML="";
+    chatTitle.textContent="Private chat with "+selectedUser;
+    closeProfile();
+}
+
+function closeProfile(){
+    profileModal.style.display="none";
+}
+</script>
+
+</body>
+  </html>
